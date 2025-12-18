@@ -1,0 +1,17 @@
+fever-drqa
+faiss-cpu
+llama-index
+llama-index-vector-stores-faiss
+sentence-transformers
+llama-index-embeddings-huggingface
+llama-index-llms-huggingface
+pyvis
+json-repair
+llama-index-retrievers-bm25
+ragas
+langchain-huggingface
+bitsandbytes
+cloudpickle
+peft
+unsloth
+qa-metrics
