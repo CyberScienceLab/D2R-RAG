@@ -1,7 +1,7 @@
 mkdir out/
-mkdir out2/
+# mkdir out2/
 
-pip intall -U pip
+pip install -U pip
 pip install -U -r requirements.txt
 
 # wget https://dl.fbaipublicfiles.com/dpr/data/retriever/biencoder-nq-train.json.gz

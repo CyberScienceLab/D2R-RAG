@@ -70,7 +70,6 @@ from ragas.embeddings import LlamaIndexEmbeddingsWrapper
 import pandas as pd
 from llama_index.llms.openai import OpenAI
 import os
-os.environ['OPENAI_API_KEY'] = "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"
 
 
 def evaluate_rag(df):

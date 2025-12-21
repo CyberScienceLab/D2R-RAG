@@ -76,9 +76,9 @@ if __name__ == "__main__":
             current_action = chunk_df.iloc[-1]["params"]
             heatmap_data1.append((last_failure_label, translate_actions(current_action)))
 
-            if last_failure_label in ["RETRIEVER_FAILURE", "NOTENOUGHINFO_FAILURE"]:
+            if last_failure_label in ["RETRIEVER_FAILURE", "INSUFFICIENT_EVIDENCE_FAILURE"]:
                 heatmap_data2.append(("Retrieval", translate_actions(current_action)))
-            elif last_failure_label in ["WRONG_PREDICATE_FAILURE", "WRONG_RESPONSE_FAILURE"]:
+            elif last_failure_label in ["WRONG_PREDICATE_FAILURE", "WRONG_RESPONSE_FAILURE", "LABEL_EVIDENCE_MISMATCH_FAILURE"]:
                 heatmap_data2.append(("Generation", translate_actions(current_action)))
 
     plot_action_heatmaps(filepath, heatmap_data1, heatmap_data2)

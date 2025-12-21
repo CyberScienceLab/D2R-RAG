@@ -25,9 +25,11 @@ class BanditPatcher:
         self.possible_actions = []
         for retriever_type in ["dense", "bm25"]:
             for topk in [10, 20]:
-                for reindex in [False]:
+                for reindex in [False, True]:
                     self.possible_actions.append((idx, {"retriever": retriever_type, "topk": topk, "reindex": reindex}))
                     idx += 1
+
+        self.action_weights = [0.25 / len(self.possible_actions) for _ in range(len(self.possible_actions))]
 
         for reranker in [True]:
             self.possible_actions.append((idx, {"reranker": reranker}))
@@ -37,11 +39,7 @@ class BanditPatcher:
             self.possible_actions.append((idx, {"prompt_edit": prompt_edit}))
             idx += 1
 
-        self.action_weights = [0.0625, 0.0625, 0.0625, 0.0625, 0.25, 0.25, 0.25]
-
-        # for lora in ["cpu", "cuda"]:
-        #     self.possible_actions.append((idx, {"lora": lora}))
-        #     idx += 1
+        self.action_weights += [0.25, 0.25, 0.25]
 
         if method == "linucb":
             self.bandit = LinUCB(len(self.possible_actions), self.context_dim, alpha=alpha)
@@ -57,20 +55,18 @@ class BanditPatcher:
         if kg_result == "CONFLICT":
             failure_label = "WRONG_PREDICATE_FAILURE" # generation problem
         elif nli_query_result == "NEUTRAL":
-            failure_label = "NOTENOUGHINFO_FAILURE" # retriever problem
+            failure_label = "INSUFFICIENT_EVIDENCE_FAILURE" # retriever problem
         elif nli_response_result in ["CONTRADICTION", "NEUTRAL"]:
             failure_label = "WRONG_RESPONSE_FAILURE" # generation problem
+            rag_label = "UNVERIFIED"
+        elif rag_label == "SUPPORTS" and nli_query_result == "CONTRADICTION":
+            failure_label = "LABEL_EVIDENCE_MISMATCH_FAILURE" # retriever problem
+        elif rag_label == "REFUTES" and nli_query_result == "ENTAILMENT":
+            failure_label = "LABEL_EVIDENCE_MISMATCH_FAILURE" # retriever problem
         else:
-            if rag_label == "SUPPORTS" and nli_query_result == "ENTAILMENT":
-                failure_label = "NO_FAILURE"
-            elif rag_label == "REFUTES" and nli_query_result == "CONTRADICTION":
-                failure_label = "NO_FAILURE"
-            elif rag_label == "NOTENOUGHINFO":
-                failure_label = "NO_FAILURE"
-            else:
-                failure_label = "LABEL_RESPONSE_MISMATCH_FAILURE" # generation problem
-            
-        return failure_label
+            failure_label = "NO_FAILURE"            
+
+        return failure_label, rag_label
 
     def get_context(self, query, context_len, failure_label, consistency_check, query_entailment_check, response_entailment_check, action_latency):
         # query_embedding = self.embedding_model.encode(query)
@@ -106,8 +102,6 @@ class BanditPatcher:
 
         if consistency_check == "CONSISTENT":
             consistency_reward = 1.
-        elif consistency_check == "CONFLICT":
-            consistency_reward = 0.
         else:
             consistency_reward = 0.
 
@@ -155,12 +149,19 @@ class BanditPatcher:
                 }
             return reward
 
-    def predict(self, context, failure_label=None, explore=False):
+    def predict(self, context, failure_label=None, explore=False, patchset="all"):
+        if patchset == "retriever":
+            armset = list(range(8))
+        elif patchset == "retriever":
+            armset = list(range(8, len(self.possible_actions)))
+        else:
+            armset = None
+            
         prob = random.random()
         if explore and prob <= self.train_exploration_rate:
             predicted_action = random.choices(self.possible_actions, k=1, weights=self.action_weights)[0]
         else:
-            predicted_action = self.possible_actions[self.bandit.select_arm(context)]
+            predicted_action = self.possible_actions[self.bandit.select_arm(context, armset)]
 
         return predicted_action
         
@@ -177,9 +178,9 @@ class BanditPatcher:
         self.failure_map = {
             "NO_FAILURE": [1, 0, 0, 0, 0],
             "WRONG_PREDICATE_FAILURE": [0, 1, 0, 0, 0],
-            "NOTENOUGHINFO_FAILURE": [0, 0, 1, 0, 0],
+            "INSUFFICIENT_EVIDENCE_FAILURE": [0, 0, 1, 0, 0],
             "WRONG_RESPONSE_FAILURE": [0, 0, 0, 1, 0],
-            "LABEL_RESPONSE_MISMATCH_FAILURE": [0, 0, 0, 0, 1],
+            "LABEL_EVIDENCE_MISMATCH_FAILURE": [0, 0, 0, 0, 1],
         }
         self.consistency_map = {
             "CONSISTENT": [1, 0, 0, 0, 0],

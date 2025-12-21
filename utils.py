@@ -1,7 +1,6 @@
 import os
 
 import yaml
-os.environ['OPENAI_API_KEY'] = "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"
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from llama_index.llms.huggingface import HuggingFaceLLM
 from llama_index.core import Settings
@@ -124,7 +123,8 @@ def load_fever(split='train'):
         evidences = content["sentences"]
         evidence_dict = {j["doc_id"]:i for i, j in zip(evidences, meta_data)}
 
-    contexts = list(set([sentence.replace("\t", " ") for evidence in evidences for sentence in evidence if len(sentence) > 0]))
+    # contexts = list(set([sentence.replace("\t", " ") for evidence in evidences for sentence in evidence if len(sentence) > 0]))
+    contexts = list(set([" ".join(evidence).replace("\t", " ").strip() for evidence in evidences if len(evidence) > 0]))
     print("Num unique contexts:", len(contexts), len(contexts))
 
     with open("./shared_task_dev.jsonl", 'r') as json_file:
@@ -158,3 +158,24 @@ def singleton(cls, *args, **kwargs):
         return instances[cls]
 
     return _singleton
+
+def precision_at_k(gt_contexts, contexts, k):    
+    states = [any([gt_context in ctx for gt_context in gt_contexts]) for ctx in contexts[:k]]
+    prec = sum([sum(states) / len(states)]) 
+    return prec
+
+def context_precision(gt_contexts, contexts, K=5):
+    if len(gt_contexts) == 0 or len(contexts) == 0:
+        return None
+    
+    prec = sum([precision_at_k(gt_contexts, contexts, k) for k in range(1, K+1)]) 
+    prec = prec / K
+    return prec
+
+def context_recall(gt_contexts, contexts):
+    if len(gt_contexts) == 0 or len(contexts) == 0:
+        return None
+    
+    recall = [any([gt_context in ctx for ctx in contexts]) for gt_context in gt_contexts]
+    recall = sum(recall) / len(recall)
+    return recall

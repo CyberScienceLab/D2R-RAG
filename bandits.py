@@ -77,7 +77,7 @@ class LinUCB(ContextualBanditAlgorithm):
         self.A = [np.identity(n_features) for _ in range(n_arms)]
         self.b = [np.zeros((n_features, 1)) for _ in range(n_arms)]
 
-    def select_arm(self, context: np.ndarray) -> int:
+    def select_arm(self, context: np.ndarray, armset) -> int:
         """
         Select an arm using the LinUCB algorithm.
 
@@ -88,8 +88,11 @@ class LinUCB(ContextualBanditAlgorithm):
             int: The index of the selected arm.
         """
         context = context.reshape(-1, 1)
-        p = np.zeros(self.n_arms)
+        p = np.zeros(self.n_arms) * -np.inf
         for arm in range(self.n_arms):
+            if armset is not None and arm not in armset:
+                continue
+
             A_inv = np.linalg.inv(self.A[arm])
             theta = A_inv @ self.b[arm]
             p[arm] = (
