@@ -88,9 +88,9 @@ class LinUCB(ContextualBanditAlgorithm):
             int: The index of the selected arm.
         """
         context = context.reshape(-1, 1)
-        p = np.zeros(self.n_arms) * -np.inf
+        p = np.zeros(self.n_arms) - np.inf
         for arm in range(self.n_arms):
-            if armset is not None and arm not in armset:
+            if arm not in armset:
                 continue
 
             A_inv = np.linalg.inv(self.A[arm])

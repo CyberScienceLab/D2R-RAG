@@ -33,7 +33,6 @@ if __name__ == "__main__":
         print("Epoch:", epoch+1)
         random.shuffle(dataset)
         for row in tqdm.tqdm(dataset):
-            query_idx += 1
             gt_context, question, gt_answer = tuple(row)
 
             params = {'retriever': 'dense', 'topk': 5, 'reranker': False, 'prompt_edit': "simple_qa", 'reindex': False}
@@ -48,16 +47,18 @@ if __name__ == "__main__":
                 print(failure_label)
 
                 context = patcher.get_context(question, len(response_obj["retrieved_context"]), failure_label, response_obj["consistency_check"], response_obj["entailment_check"]["query"], response_obj["entailment_check"]["response"], response_obj["latency"])
-                action = patcher.predict(context, patchset="retriever" if response_obj["label"] == "UNVERIFIED" else "all")
+                patchset = "retriever" if response_obj["label"] == "UNVERIFIED" else "all"
+                print("patchset:", patchset)
+                action = patcher.predict(context, patchset=patchset)
                 action_idx, params_updates = action
                 print(params_updates)
 
                 params.update(params_updates)
                 response_obj_patched = rag.query(question, params=params, consistency_check=True, entailment_check=True)
-                print(response_obj_patched)
 
                 failure_label_patched, new_label_patched = patcher.get_failure_label(response_obj_patched)
                 response_obj_patched["label"] = new_label_patched
+                print(response_obj_patched)
 
                 reward = patcher.calculate_reward(failure_label_patched, response_obj_patched["consistency_check"], response_obj_patched["entailment_check"]["response"], response_obj_patched["latency"], response_obj_patched["vram_usage"])
                 patcher.update_bandit(context, action_idx, reward["total_reward"])

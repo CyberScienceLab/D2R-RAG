@@ -152,11 +152,11 @@ class BanditPatcher:
     def predict(self, context, failure_label=None, explore=False, patchset="all"):
         if patchset == "retriever":
             armset = list(range(8))
-        elif patchset == "retriever":
+        elif patchset == "generation":
             armset = list(range(8, len(self.possible_actions)))
         else:
-            armset = None
-            
+            armset = list(range(len(self.possible_actions)))
+        
         prob = random.random()
         if explore and prob <= self.train_exploration_rate:
             predicted_action = random.choices(self.possible_actions, k=1, weights=self.action_weights)[0]
