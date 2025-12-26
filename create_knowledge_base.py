@@ -136,50 +136,8 @@ class WikipagesKnowledgeBase:
             pickle.dump({"knowledge_base": knowledge_base, "meta_data": meta_data, "sentences": sentences}, f)
 
 
-class HotpotQAKnowledgeBase:
-
-    def create_knowledge_base(self, hotpot_json_path, target_read_slices, claim_cutoff):
-        with open(hotpot_json_path) as f:
-            content = json.load(f)
-
-        names = []
-        knowledge_base = []
-        meta_data = []
-        sentences = []
-        for row in content[:claim_cutoff]:
-            for cont in row['context']:
-                name, sents = cont
-                if name not in names:
-                    knowledge_base.append(" ".join(sents))
-                    meta_data.append({"doc_id": name})
-                    sentences.append(sents)
-
-                if len(knowledge_base) >= target_read_slices:
-                    break
-
-            if len(knowledge_base) >= target_read_slices:
-                break
-
-        print("knowledge_base size:", len(knowledge_base))
-
-        return knowledge_base, meta_data, sentences
-
-    def build(self, hotpot_json_path, target_read_slices, filepath, claim_cutoff=-1):
-        knowledge_base, meta_data, sentences = self.create_knowledge_base(hotpot_json_path, target_read_slices, claim_cutoff)
-
-        print(knowledge_base[0])
-        print(meta_data[0])
-        print(sentences[0])
-
-        with open(filepath, 'wb') as f:
-            pickle.dump({"knowledge_base": knowledge_base, "meta_data": meta_data, "sentences": sentences}, f)
-
-
 if __name__ == "__main__":
     if sys.argv[1] == "fever":
         wkb = WikipagesKnowledgeBase()
-        wkb.build("./shared_task_dev.jsonl", "./wiki-pages", -1, filepath='out/knowledge_base.pkl', claim_cutoff=2000)
+        wkb.build("./shared_task_dev.jsonl", "./wiki-pages", -1, filepath='files_fever_v/knowledge_base.pkl', claim_cutoff=2000)
         # wkb.build("./shared_task_dev.jsonl", "./wiki-pages", -1)
-    elif sys.argv[1] == "hotpotqa":
-        hkb = HotpotQAKnowledgeBase()
-        hkb.build("./hotpot_dev_fullwiki_v1.json", -1, filepath='out2/knowledge_base.pkl', claim_cutoff=2000)

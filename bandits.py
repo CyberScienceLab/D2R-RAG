@@ -242,10 +242,11 @@ class ThompsonSampling(ContextualBanditAlgorithm):
             n_arms (int): Number of arms.
         """
         super().__init__(n_arms)
+        self.n_arms = n_arms
         self.alpha = np.ones(n_arms)
         self.beta = np.ones(n_arms)
 
-    def select_arm(self, context: np.ndarray = None) -> int:
+    def select_arm(self, context: np.ndarray = None, armset=None) -> int:
         """
         Select an arm using Thompson Sampling.
 
@@ -256,6 +257,13 @@ class ThompsonSampling(ContextualBanditAlgorithm):
             int: The index of the selected arm.
         """
         samples = np.random.beta(self.alpha, self.beta)
+
+        for arm in range(self.n_arms):
+            if arm not in armset:
+                samples[arm] = -np.inf
+            
+        print("samples in ThompsonSampling class select_arm:", samples)
+
         return int(np.argmax(samples))
 
     def update(self, arm: int, context: np.ndarray = None, reward: float = None):

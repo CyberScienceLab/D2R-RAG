@@ -26,13 +26,14 @@ import time
 
 class RAGEngine:
 
-    def __init__(self, output_path, contexts, knowledge_graph=None, **kwargs):
+    def __init__(self, output_path, knowledgebase, knowledge_graph=None, **kwargs):
         self.output_path = output_path
         self.kwargs = kwargs
         self.knowledge_graph = knowledge_graph
-        self.contexts = contexts
+        self.knowledgebase = knowledgebase
+        self.knowledgebase.reset()
 
-        self.build_nodes(contexts)
+        self.build_nodes()
 
         self.first_time_dense_index = True
         self.first_time_bm25_index = True
@@ -52,7 +53,7 @@ class RAGEngine:
         self.triplet_extractor = TripletExtractor(**kwargs)
         self.entailment_checker = EntailmentChecker(**kwargs)
 
-    def build_nodes(self, contexts):
+    def build_nodes(self):
         """
             source: https://www.llamaindex.ai/blog/a-cheat-sheet-and-some-recipes-for-building-advanced-rag-803a9d94c41b
         """
@@ -60,7 +61,7 @@ class RAGEngine:
         print("[MSG] Building nodes from documents...")
         node_parser = SentenceSplitter(chunk_size=128, chunk_overlap=16)
 
-        documents = [Document(text=text, extra_info={}) for text in contexts]
+        documents = [Document(text=text, extra_info={}) for text in self.knowledgebase]
         base_nodes = node_parser.get_nodes_from_documents(documents)
         self.all_nodes = base_nodes
 
@@ -184,7 +185,8 @@ class RAGEngine:
         tic = time.perf_counter()
 
         if reindex:
-            self.build_nodes(self.contexts)
+            self.knowledgebase.evolve()
+            self.build_nodes()
             if retriever_type == "dense":
                 retriever = self.build_dense_retriever(topk)
             elif retriever_type == "bm25":
@@ -229,3 +231,66 @@ class RAGEngine:
         response_obj["vram_usage"] = vram_usage
 
         return response_obj
+    
+    def query_shortanswer(self, query_str, params={}, consistency_check=False, entailment_check=False):
+        retriever_type = params.get("retriever", "bm25")
+        topk = params.get("topk", 5)
+        reranker = params.get("reranker", False)
+        prompt_edit = params.get("prompt_edit", False)
+        reindex = params.get("reindex", False)
+        response_obj = {}
+
+        if self.kwargs["device"] == "cuda":
+            torch.cuda.reset_peak_memory_stats()
+            torch.cuda.synchronize()
+            start_mem = torch.cuda.memory_allocated()
+        else:
+            start_mem = 0.
+        tic = time.perf_counter()
+
+        if reindex:
+            self.knowledgebase.evolve()
+            self.build_nodes()
+            if retriever_type == "dense":
+                retriever = self.build_dense_retriever(topk)
+            elif retriever_type == "bm25":
+                retriever = self.build_bm25_retriever(topk)
+            
+            query_engine = self.build_query_engine(retriever, reranker=reranker, prompt_edit=prompt_edit)
+        else:
+            query_engine = self.query_engines[f"{retriever_type}_{topk}_{reranker}_{prompt_edit}"]
+        
+        response_object = query_engine.query(query_str)
+        response = response_object.response.strip()
+        if response == "Empty Response":
+            # In case no node found by the retriever:
+            # https://github.com/run-llama/llama_index/blob/fe72a2f5dbefb92d8c91cb460d4299de5637aa5a/llama-index-core/llama_index/core/response_synthesizers/base.py#L284
+
+            response = {"response": "The provided context is insufficient."}
+        else:
+            response = {"response": response.replace("Response 1: ", "")}
+
+        response_obj.update(response)
+
+        latency = time.perf_counter() - tic # seconds
+        if self.kwargs["device"] == "cuda":
+            torch.cuda.synchronize()
+            peak_after = torch.cuda.max_memory_allocated()
+            vram_usage = (peak_after - start_mem) / 1048576 # MB, 1024 * 1024
+        else:
+            vram_usage = 0.
+
+        response_obj["query"] = query_str
+        response_obj["retrieved_context"] = [{"text": n.node.text, 'node_id': n.id_, 'score': n.score} for n in response_object.source_nodes]
+
+        if self.knowledge_graph and consistency_check:
+            response_obj["consistency_check"] = self.knowledge_graph.consistency_check(response_obj["response"])
+
+        if entailment_check:
+            response_obj["entailment_check"] = self.entailment_checker.check(query_str, response_obj["response"], response_obj["retrieved_context"])
+
+        response_obj["latency"] = latency
+        response_obj["vram_usage"] = vram_usage
+
+        return response_obj
+    

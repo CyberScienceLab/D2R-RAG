@@ -59,57 +59,33 @@ sys.modules["ragas"] = module
 #############################
 
 from datasets import Dataset
-# from llama_index.llms.huggingface import HuggingFaceLLM
-# from transformers import AutoTokenizer, AutoModelForCausalLM
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
 from ragas import evaluate
-from ragas.metrics import context_recall, context_precision, answer_relevancy, faithfulness
+from ragas.metrics import answer_relevancy, faithfulness
 from ragas.llms.base import LlamaIndexLLMWrapper
 from ragas.embeddings import LlamaIndexEmbeddingsWrapper
-# from sklearn.metrics import accuracy_score
-import pandas as pd
 from llama_index.llms.openai import OpenAI
-import os
 
 
-def evaluate_rag(df):
+gt_map = {
+    'SUPPORTS': "The claim in this statement is correct.", 
+    'REFUTES': "The claim in this statement is wrong.", 
+    'NOTENOUGHINFO': "There is not enough information about the claim in this statement."
+}
+
+def evaluate_rag(df, dataset_name):
     df = df.fillna('')
     filtered_df = df.loc[:, ["question", "response", "contexts", "gt_response"]].copy()
     filtered_df = filtered_df.rename(columns={'response': 'answer', 'gt_response': 'ground_truth'})
-
-    print("Latency", df["latency"].mean())
-    print("VRAM Usage", df["vram_usage"].mean())
-    print("KG Consistency", (df["kg_consistency"] == "CONSISTENT").mean())
+    
+    if dataset_name in ["fever"]:
+        filtered_df["ground_truth"] = filtered_df["ground_truth"].map(gt_map)
 
     data = {column:filtered_df[column].to_list() for column in filtered_df.columns}
-    data["contexts"] = [eval(item) for item in data["contexts"]]
-    dataset = Dataset.from_dict(data)
+    data["contexts"] = [eval(item.replace("\'\n \'", "\' , \'")) for item in data["contexts"]]
 
     device = "cuda" if torch.cuda.is_available() else "cpu"
 
-    # llm_model_name = "tiiuae/Falcon3-1B-Instruct"
-    # tokenizer = AutoTokenizer.from_pretrained(llm_model_name)
-    # model = AutoModelForCausalLM.from_pretrained(
-    #     llm_model_name,
-    #     device_map="cuda",
-    #     # load_in_4bit=True,
-    #     dtype=torch.bfloat16
-    # )
-    # tokenizer.padding_side = "left"
-    # tokenizer.pad_token = tokenizer.eos_token
-    # model.config.pad_token_id = model.config.eos_token_id
-
-    # llm = HuggingFaceLLM(
-    #     model=model,
-    #     tokenizer=tokenizer,
-    #     system_prompt=(
-    #         "Output your response in the demanded JSON format."
-    #         "Keep your statements short."
-    #     ),
-    #     context_window=8192,
-    #     max_new_tokens=256,
-    #     device_map="cuda",
-    # )
     llm = OpenAI(model="gpt-4o-mini")
     embed_model = HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2", device=device)
     
@@ -118,28 +94,16 @@ def evaluate_rag(df):
 
     print("Running RAGAS evaluation on FEVER dataset...")
     METRICS = [
-        # context_recall,
-        # context_precision,
         answer_relevancy,
         faithfulness,
     ]
+
     result = evaluate(
         llm=llm_wrapper,
         embeddings=embed_wrapper,
-        dataset=dataset,
+        dataset=Dataset.from_dict(data),
         metrics=METRICS,
         batch_size=64,
         raise_exceptions=False,
     )
-
-    print("Evaluation completed successfully:")
     print(result)
-
-if __name__ == "__main__":
-    if sys.argv[1] == "fever":
-        filepath = "out"
-    elif sys.argv[1] == "hotpotqa":
-        filepath = "out2"
-
-    df = pd.read_csv(f"{filepath}/eval_dataset.csv", sep="\t")
-    evaluate_rag(df)

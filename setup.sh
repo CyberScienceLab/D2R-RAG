@@ -1,5 +1,9 @@
-mkdir out/
-# mkdir out2/
+mkdir files_fever_t/
+mkdir files_fever_v/
+mkdir files_hotpotqa_t/
+mkdir files_hotpotqa_v/
+mkdir files_fever_ts_t/
+mkdir files_fever_ts_v/
 
 pip install -U pip
 pip install -U -r requirements.txt

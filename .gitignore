@@ -1,2 +1,2 @@
-out.tar.gz
-out/
+files_*/
+files_*.tar.gz

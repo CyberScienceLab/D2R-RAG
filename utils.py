@@ -1,8 +1,5 @@
-import os
-
-import yaml
+from create_knowledge_base import WikipagesKnowledgeBase
 from llama_index.embeddings.huggingface import HuggingFaceEmbedding
-from llama_index.llms.huggingface import HuggingFaceLLM
 from llama_index.core import Settings
 import torch
 from llama_index.llms.openai import OpenAI
@@ -13,26 +10,23 @@ import random
 random.seed(42)
 import pickle
 import tqdm
+import numpy as np
+import yaml
 
 
 def setup_settings(dataset):
     device = "cuda" if torch.cuda.is_available() else "cpu"
     embedding_model = HuggingFaceEmbedding(model_name="sentence-transformers/all-MiniLM-L6-v2", device=device)
 
-    with open("prompts.yaml", 'r') as f:
+    prompts_filepath = "prompts_shortanswer.yaml" if dataset in ["hotpotqa"] else "prompts.yaml"
+    with open(prompts_filepath, 'r') as f:
         prompts = yaml.load(f, Loader=yaml.FullLoader)
+
+    if dataset in ["fever"]:
+        kg_thresholds = {"subject_score": 0.9, "relation_score": 0.9, "object_score": 0.1}
+    elif dataset in ["hotpotqa"]:
+        kg_thresholds = {"subject_score": 0.9, "relation_score": 0.9, "object_score": 0.5}
     
-    # llm_model_name = "Qwen/Qwen2.5-1.5B-Instruct"
-    # llm_model = HuggingFaceLLM(
-    #     model_name=llm_model_name,
-    #     tokenizer_name=llm_model_name,
-    #     context_window=8192,
-    #     is_chat_model=True,
-    #     generate_kwargs={"do_sample": False},
-    #     # model_kwargs={"load_in_4bit": True, "dtype": torch.bfloat16},
-    #     model_kwargs={"dtype": torch.bfloat16},
-    #     max_new_tokens=256,
-    # )
     llm_model = OpenAI(model="gpt-4o-mini")
     
     Settings.llm = llm_model
@@ -41,10 +35,10 @@ def setup_settings(dataset):
     similarity_top_k = 3
     reranker_top_n = 3
     similarity_cutoff = 0.4
-    rag_storage_dir = "storage_rag" if dataset == "fever" else "storage_rag2"
-    kg_storage_dir = "storage_kg" if dataset == "fever" else "storage_kg2"
-    dense_retriever_storage = "dense_storage" if dataset == "fever" else "dense_storage2"
-    bm25_retriever_storage = "bm25_storage" if dataset == "fever" else "bm25_storage2"
+    rag_storage_dir = "storage_rag"
+    kg_storage_dir = "storage_kg"
+    dense_retriever_storage = "dense_storage"
+    bm25_retriever_storage = "bm25_storage"
 
     return {
         "device": device, 
@@ -57,7 +51,7 @@ def setup_settings(dataset):
         "similarity_cutoff": similarity_cutoff,
         "rag_storage_dir": rag_storage_dir,
         "kg_storage_dir": kg_storage_dir,
-        # "KG_completion_prompt": knowledge_graph_completion_prompt,
+        "kg_thresholds": kg_thresholds,
         "dense_retriever_storage": dense_retriever_storage,
         "bm25_retriever_storage": bm25_retriever_storage}
 
@@ -117,15 +111,26 @@ def load_nq(split='train'):
     return dataset, (contexts, contexts)
 
 def load_fever(split='train'):
-    with open("./out/knowledge_base.pkl", 'rb') as f:
+    with open("./files_fever_v/knowledge_base.pkl", 'rb') as f:
         content = pickle.load(f)
         meta_data = content["meta_data"]
         evidences = content["sentences"]
         evidence_dict = {j["doc_id"]:i for i, j in zip(evidences, meta_data)}
 
-    # contexts = list(set([sentence.replace("\t", " ") for evidence in evidences for sentence in evidence if len(sentence) > 0]))
     contexts = list(set([" ".join(evidence).replace("\t", " ").strip() for evidence in evidences if len(evidence) > 0]))
-    print("Num unique contexts:", len(contexts), len(contexts))
+
+    wkb = WikipagesKnowledgeBase()
+    secondary_contexts = []
+    for f in tqdm.tqdm(wkb.iter_files("./wiki-pages")):
+        documents = wkb.get_contents(f)
+        secondary_contexts.extend(list(map(lambda item: wkb.preprocess(item[1]), documents)))
+        if len(secondary_contexts) > 100000:
+            secondary_contexts = secondary_contexts[:100000]
+            break
+
+    print("Num unique contexts:", len(contexts), len(secondary_contexts))
+
+    kb = KnowledgeBaseSimulator(contexts, secondary_contexts, random_seed=42)
 
     with open("./shared_task_dev.jsonl", 'r') as json_file:
         if split == "train":
@@ -146,7 +151,22 @@ def load_fever(split='train'):
 
     print("fever_dataset size:", len(fever_dataset))
 
-    return fever_dataset, (contexts, contexts)
+    return fever_dataset, kb
+
+def load_hotpotqa(split='train'):
+    dataset = load_dataset('hotpotqa/hotpot_qa', 'fullwiki', split=f"{split}[:500]")
+    contexts = list(set(["".join(hop) for context in dataset['context'] for hop in context['sentences']]))
+    
+    dataset_ = load_dataset('hotpotqa/hotpot_qa', 'fullwiki', split=f"{split}[:100000]")
+    secondary_contexts = list(set(["".join(hop) for context in dataset_['context'] for hop in context['sentences']]))
+    
+    print("Num unique contexts:", len(contexts), len(secondary_contexts))
+
+    kb = KnowledgeBaseSimulator(contexts, secondary_contexts, random_seed=42)
+
+    dataset = [([], q_item, [a_item]) for q_item, a_item in zip(dataset['question'], dataset['answer'])]
+
+    return dataset, kb
 
 def singleton(cls, *args, **kwargs):
     instances = {}
@@ -179,3 +199,68 @@ def context_recall(gt_contexts, contexts):
     recall = [any([gt_context in ctx for ctx in contexts]) for gt_context in gt_contexts]
     recall = sum(recall) / len(recall)
     return recall
+
+
+class KnowledgeBaseSimulator:
+
+    def __init__(self, primary_kb, secondary_kb, random_seed=42):
+        self.primary_kb = primary_kb.copy()
+        self.secondary_kb = secondary_kb.copy()
+        self.random_seed = random_seed
+
+        self.current_kb = self.primary_kb.copy()
+        self.set_random_seed()
+        self._index = 0
+
+    def set_random_seed(self):
+        random.seed(self.random_seed)
+        np.random.seed(self.random_seed)
+
+    def evolve(self):
+        if random.random() > 0.5:
+            print("Current knowledge base size:", len(self.current_kb))
+            return
+        
+        num_passages_to_add = 100
+        num_to_add = min(num_passages_to_add, len(self.secondary_kb))
+        passages_to_add = random.sample(self.secondary_kb, num_to_add)
+        self.current_kb.extend(passages_to_add)
+        print("Current knowledge base size:", len(self.current_kb))
+
+    def reset(self):
+        self.set_random_seed()
+        self.current_kb = self.primary_kb.copy()
+        self._index = 0
+
+    def get_current_kb(self):
+        return self.current_kb.copy()
+
+    def __len__(self):
+        return len(self.current_kb)
+
+    def __getitem__(self, index):
+        return self.current_kb.copy()[index]
+
+    def __iter__(self):
+        return self
+
+    def __next__(self):
+        if self.has_next():
+            return self.next()
+        else:
+            raise StopIteration
+
+    def has_next(self):
+        flag = self._index < len(self.current_kb)
+
+        if not flag:
+            self._index = 0
+
+        return flag
+
+    def next(self):
+        if not self.has_next():
+            raise IndexError("No more elements in the list.")
+        element = self.current_kb.copy()[self._index]
+        self._index += 1
+        return element

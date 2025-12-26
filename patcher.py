@@ -47,28 +47,30 @@ class BanditPatcher:
             self.bandit = ThompsonSampling(len(self.possible_actions))
 
     def get_failure_label(self, rag_response):
-        rag_label = rag_response.get("label", "NOTENOUGHINFO")
         kg_result = rag_response.get("consistency_check", "MISSING")
         nli_response_result = rag_response.get("entailment_check", {}).get("response", "ENTAILMENT")
         nli_query_result = rag_response.get("entailment_check", {}).get("query", "ENTAILMENT")
+        rag_label = rag_response.get("label", "SUPPORTS" if nli_query_result == "ENTAILMENT" else "REFUTES")
 
         if kg_result == "CONFLICT":
             failure_label = "WRONG_PREDICATE_FAILURE" # generation problem
         elif nli_query_result == "NEUTRAL":
             failure_label = "INSUFFICIENT_EVIDENCE_FAILURE" # retriever problem
+            rag_label = "UNVERIFIED"
         elif nli_response_result in ["CONTRADICTION", "NEUTRAL"]:
             failure_label = "WRONG_RESPONSE_FAILURE" # generation problem
-            rag_label = "UNVERIFIED"
         elif rag_label == "SUPPORTS" and nli_query_result == "CONTRADICTION":
             failure_label = "LABEL_EVIDENCE_MISMATCH_FAILURE" # retriever problem
+            rag_label = "UNVERIFIED"
         elif rag_label == "REFUTES" and nli_query_result == "ENTAILMENT":
             failure_label = "LABEL_EVIDENCE_MISMATCH_FAILURE" # retriever problem
+            rag_label = "UNVERIFIED"
         else:
             failure_label = "NO_FAILURE"            
 
         return failure_label, rag_label
 
-    def get_context(self, query, context_len, failure_label, consistency_check, query_entailment_check, response_entailment_check, action_latency):
+    def get_context(self, query, failure_label, consistency_check, query_entailment_check, response_entailment_check, action_latency):
         # query_embedding = self.embedding_model.encode(query)
         # query_embedding = torch.avg_pool1d(torch.from_numpy(query_embedding[None, ...]), 8)[0].numpy().tolist()
         inputs = self.embedding_tokenizer(query, return_tensors="pt", padding=True, truncation=True).to(self.device)
@@ -171,8 +173,8 @@ class BanditPatcher:
     def save_bandit(self):
         cloudpickle.dump(self.bandit, open(f"{self.output_path}/{self.method}_patcher.pkl", "wb"))
 
-    def load_bandit(self):
-        self.bandit = cloudpickle.load(open(f"{self.output_path}/{self.method}_patcher.pkl", "rb"))
+    def load_bandit(self, patcher_filepath):
+        self.bandit = cloudpickle.load(open(f"{patcher_filepath}/{self.method}_patcher.pkl", "rb"))
 
     def init_cfg(self):
         self.failure_map = {

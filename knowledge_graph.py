@@ -25,18 +25,18 @@ class KnowledgeGraph:
         self.output_path = output_path
         self.kwargs = kwargs
         self.triplet_extractor = TripletExtractor(**kwargs)
-        self.embedding_model = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+        self.embedding_model = SentenceTransformer("sentence-transformers/all-mpnet-base-v2")
 
-    def create_KB_documents(self, contexts):
+    def create_KB_documents(self, knowledgebase):
         documents = []
-        for text in contexts:
+        for text in knowledgebase:
             document = Document(text=text, extra_info={})
             documents.append(document)
 
         return documents
     
-    def manual_check_triplets(self, contexts):
-        documents = self.create_KB_documents(contexts)
+    def manual_check_triplets(self, knowledgebase):
+        documents = self.create_KB_documents(knowledgebase)
         print("kb_documents size:", len(documents))
         print(documents[0])
 
@@ -54,7 +54,7 @@ class KnowledgeGraph:
 
         self.index = KnowledgeGraphIndex.from_documents(
             triplet_documents,
-            max_triplets_per_chunk=5,
+            max_triplets_per_chunk=10,
             include_embeddings=True,
             kg_triplet_extract_fn=self.triplet_extractor.extract_triplets,
             storage_context=storage_context,
@@ -62,7 +62,7 @@ class KnowledgeGraph:
         )
         self.index.storage_context.persist(persist_dir=os.path.join(self.output_path, self.kwargs["kg_storage_dir"]))
 
-    def build(self, contexts):
+    def build(self, knowledgebase):
         if os.path.exists(os.path.join(self.output_path, self.kwargs["kg_storage_dir"], 'index_store.json')):
             print("[MSG] Loading knowledge graph...")
 
@@ -72,7 +72,7 @@ class KnowledgeGraph:
         else:
             print("[MSG] Building knowledge graph...")
 
-            documents = self.create_KB_documents(contexts)
+            documents = self.create_KB_documents(knowledgebase)
             print("kb_documents size:", len(documents))
             print(documents[0])
 
@@ -98,9 +98,11 @@ class KnowledgeGraph:
         r_score = float(np.dot(q_r, db_r))
         o_score = float(np.dot(q_o, db_o))
 
-        if s_score < 0.6 or o_score < 0.6:
+        if s_score < self.kwargs["kg_thresholds"]["subject_score"]: 
             return "MISSING"
-        elif r_score < 0.1:
+        elif r_score < self.kwargs["kg_thresholds"]["relation_score"]:
+            return "MISSING"
+        elif o_score < self.kwargs["kg_thresholds"]["object_score"]:
             return "CONFLICT"
         
         return "CONSISTENT"
@@ -128,10 +130,10 @@ class KnowledgeGraph:
                 
                 consistency_checks.append(prediction)
 
-        if "MISSING" in consistency_checks:
-            return "MISSING"
-        elif "CONFLICT" in consistency_checks:
+        if "CONFLICT" in consistency_checks:
             return "CONFLICT"
+        elif "MISSING" in consistency_checks:
+            return "MISSING"
         elif len(input_text) == 0:
             return "EMPTYINPUT"
         elif len(consistency_checks) == 0:
