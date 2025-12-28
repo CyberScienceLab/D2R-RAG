@@ -110,8 +110,8 @@ def load_nq(split='train'):
 
     return dataset, (contexts, contexts)
 
-def load_fever(split='train'):
-    with open("./files_fever_v/knowledge_base.pkl", 'rb') as f:
+def load_fever(filepath, split='train'):
+    with open(os.path.join(filepath, "knowledge_base.pkl"), 'rb') as f:
         content = pickle.load(f)
         meta_data = content["meta_data"]
         evidences = content["sentences"]

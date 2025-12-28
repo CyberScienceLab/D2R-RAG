@@ -19,11 +19,22 @@ def translate_actions(action):
     return action
 
 if __name__ == "__main__":
-    assert sys.argv[1] in ["fever", "hotpotqa"]
-    if sys.argv[1] == "fever":
+    dataset_name = sys.argv[1]
+    assert dataset_name in ["fever", "fever_ts", "hotpotqa", "hotpotqa_ts", "fever_selfrag", "hotpotqa_selfrag"]
+    if dataset_name == "fever":
         filepath = "files_fever_v"
-    elif sys.argv[1] == "hotpotqa":
+    elif dataset_name == "fever_ts":
+        dataset_name = "fever"
+        filepath = "files_fever_ts_v"
+    elif dataset_name == "hotpotqa":
         filepath = "files_hotpotqa_v"
+    elif dataset_name == "hotpotqa_ts":
+        filepath = "files_hotpotqa_ts_v"
+    elif dataset_name == "fever_selfrag":
+        dataset_name = "fever"
+        filepath = "files_fever_selfrag_v"
+    elif dataset_name == "hotpotqa_selfrag":
+        filepath = "files_hotpotqa_selfrag_v"
         
     pre_df = pd.read_csv(f"{filepath}/failure_statistics.csv", sep="\t")
     post_df = pd.read_csv(f"{filepath}/bandit_eval_dataset.csv", sep="\t")
@@ -65,9 +76,5 @@ if __name__ == "__main__":
     for label in post_df["failure_label"].unique():
         print("evaluaing", label)
         df_label = post_df[post_df["failure_label"] == label]
-        evaluate_rag(df_label, sys.argv[1])
-        print("evaluaing", label, "done")
-
-    print("evaluaing overall")
-    evaluate_rag(post_df, sys.argv[1])
-    print("evaluaing overall done")
+        evaluate_rag(df_label, dataset_name)
+        print("evaluaing", label, "done", df_label.shape)

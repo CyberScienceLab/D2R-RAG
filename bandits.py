@@ -262,8 +262,6 @@ class ThompsonSampling(ContextualBanditAlgorithm):
             if arm not in armset:
                 samples[arm] = -np.inf
             
-        print("samples in ThompsonSampling class select_arm:", samples)
-
         return int(np.argmax(samples))
 
     def update(self, arm: int, context: np.ndarray = None, reward: float = None):

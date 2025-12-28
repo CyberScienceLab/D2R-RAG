@@ -206,8 +206,6 @@ class RAGEngine:
         else:
             response = json.loads(repair_json(response))
 
-        # response = response.replace("Response 1: ", "")
-
         response_obj.update(response)
 
         latency = time.perf_counter() - tic # seconds

@@ -12,18 +12,25 @@ from patcher import BanditPatcher
 
 
 if __name__ == "__main__":
-    assert sys.argv[1] in ["fever"]
-    if sys.argv[1] == "fever":
+    dataset_name = sys.argv[1]
+    assert dataset_name in ["fever", "fever_ts"]
+    if dataset_name == "fever":
+        method = "linucb"
         filepath = "files_fever_t"
-        dataset, knowledgebase = load_fever(split='train')
+        dataset, knowledgebase = load_fever("files_fever_v", split='train')
+    elif dataset_name == "fever_ts":
+        dataset_name = "fever"
+        method = "thompsonsampling"
+        filepath = "files_fever_ts_t"
+        dataset, knowledgebase = load_fever("files_fever_ts_v", split='train')
         
-    setup = setup_settings(sys.argv[1])
+    setup = setup_settings(dataset_name)
 
     kgraph = KnowledgeGraph(filepath, **setup)
     kgraph.build(knowledgebase)
     rag = RAGEngine(filepath, knowledgebase, knowledge_graph=kgraph, **setup)
 
-    patcher = BanditPatcher(filepath, latency_budget=3, vram_budget=6000, method="linucb", alpha=2.)
+    patcher = BanditPatcher(filepath, latency_budget=3, vram_budget=6000, method=method, alpha=2.)
 
     EPOCHS = 2
 

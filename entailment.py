@@ -11,6 +11,9 @@ class EntailmentChecker:
         self.tokenizer = AutoTokenizer.from_pretrained('MoritzLaurer/DeBERTa-v3-large-mnli-fever-anli-ling-wanli')
 
     def check(self, query, response, retrieved_context):
+        if len(retrieved_context) == 0:
+            return {"query": "NEUTRAL", "response": "NEUTRAL"}
+        
         query_entailment_label = [self.nli_model(self.tokenizer.encode(ctx['text'], query, return_tensors='pt').to(self.device)).logits.argmax(1).item() for ctx in retrieved_context]
         if all(list(map(lambda item: item == 1, query_entailment_label))):
             query_entailment_label = "NEUTRAL"

@@ -12,18 +12,25 @@ from patcher import BanditPatcher
 
 
 if __name__ == "__main__":
-    assert sys.argv[1] in ["hotpotqa"]
-    if sys.argv[1] == "hotpotqa":
+    dataset_name = sys.argv[1]
+    assert dataset_name in ["hotpotqa", "hotpotqa_ts"]
+    if dataset_name == "hotpotqa":
+        method = "linucb"
         filepath = "files_hotpotqa_t"
         dataset, knowledgebase = load_hotpotqa(split='train')
+    elif dataset_name == "hotpotqa_ts":
+        dataset_name = "hotpotqa"
+        method = "thompsonsampling"
+        filepath = "files_hotpotqa_ts_t"
+        dataset, knowledgebase = load_hotpotqa(split='train')
         
-    setup = setup_settings(sys.argv[1])
+    setup = setup_settings(dataset_name)
 
     kgraph = KnowledgeGraph(filepath, **setup)
     kgraph.build(knowledgebase)
     rag = RAGEngine(filepath, knowledgebase, knowledge_graph=kgraph, **setup)
 
-    patcher = BanditPatcher(filepath, latency_budget=3, vram_budget=6000, method="linucb", alpha=2.)
+    patcher = BanditPatcher(filepath, latency_budget=3, vram_budget=6000, method=method, alpha=2.)
 
     EPOCHS = 2
 

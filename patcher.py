@@ -9,7 +9,7 @@ from transformers import AutoTokenizer, AutoModel
 
 class BanditPatcher:
 
-    def __init__(self, output_path, latency_budget=None, vram_budget=None, method="linucb", alpha=1., train_exploration_rate=0.2, reward_binary_threshold=0.5):
+    def __init__(self, output_path, latency_budget=None, vram_budget=None, method="linucb", alpha=1., train_exploration_rate=0.2, reward_binary_threshold=0.4):
         self.output_path = output_path
 
         self.reward_binary_threshold = reward_binary_threshold
