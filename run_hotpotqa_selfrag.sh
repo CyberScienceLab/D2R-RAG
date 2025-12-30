@@ -1,4 +1,3 @@
-mkdir files_hotpotqa_selfrag_t/
 mkdir files_hotpotqa_selfrag_v/
 
 pip install -U pip

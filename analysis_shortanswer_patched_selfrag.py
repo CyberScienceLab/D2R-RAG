@@ -45,7 +45,7 @@ if __name__ == "__main__":
         "EM": [],
     }
     query_idx = -1
-    for row in tqdm.tqdm(dataset):
+    for row in tqdm.tqdm(dataset[0:250]):
         query_idx += 1
         gt_context, question, gt_answer = tuple(row)
 

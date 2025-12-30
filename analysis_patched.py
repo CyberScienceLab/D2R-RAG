@@ -123,17 +123,17 @@ if __name__ == "__main__":
         print(f"######## {c} (Incorrect) #######")
         print(dataset[dataset["EM"] == False][c].value_counts())
     
-    print(f"######## {c} (Correct) #######")
+    print(f"######## (Correct) #######")
     print("context_precision@5", dataset[dataset["EM"] == True]["context_precision@5"].dropna().mean())
     print("context_recall", dataset[dataset["EM"] == True]["context_recall"].dropna().mean())
-    print(f"######## {c} (Incorrect) #######")
+    print(f"######## (Incorrect) #######")
     print("context_precision@5", dataset[dataset["EM"] == False]["context_precision@5"].dropna().mean())
     print("context_recall", dataset[dataset["EM"] == False]["context_recall"].dropna().mean())
 
-    print(f"######## {c} (Correct) #######")
+    print(f"######## Label (Correct) #######")
     print(dataset[dataset["EM"] == True]["gt_response"].value_counts())
     print(dataset[dataset["EM"] == True]["response_label"].value_counts())
-    print(f"######## {c} (Incorrect) #######")
+    print(f"######## Label (Incorrect) #######")
     print(dataset[dataset["EM"] == False]["gt_response"].value_counts())
     print(dataset[dataset["EM"] == False]["response_label"].value_counts())
     

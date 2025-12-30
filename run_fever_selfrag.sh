@@ -1,4 +1,3 @@
-mkdir files_fever_selfrag_t/
 mkdir files_fever_selfrag_v/
 
 pip install -U pip
