@@ -5,7 +5,11 @@ import numpy as np
 
 
 def translate_actions(action):
-    action = eval(action)
+    if not pd.isna(action):
+        action = eval(action)
+    else:
+        action = {}
+
     if "reranker" in action:
         action = "Reranker activation"
     elif "prompt_edit" in action:
@@ -15,6 +19,8 @@ def translate_actions(action):
             action = "Simplify query"
     elif "retriever" in action:
         action = f"{action['retriever']}, top-{action['topk']}, reindex={action['reindex']}"
+    else:
+        action = "Default Action"
             
     return action
 

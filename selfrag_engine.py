@@ -97,12 +97,6 @@ class SelfRAGEngine(RAGEngine):
     def query_shortanswer(self, query_str, params={}, consistency_check=False, entailment_check=False):
         response_obj = {}
 
-        if self.kwargs["device"] == "cuda":
-            torch.cuda.reset_peak_memory_stats()
-            torch.cuda.synchronize()
-            start_mem = torch.cuda.memory_allocated()
-        else:
-            start_mem = 0.
         tic = time.perf_counter()
 
         query = """You are a helpful assistant.
@@ -130,7 +124,7 @@ class SelfRAGEngine(RAGEngine):
         if self.kwargs["device"] == "cuda":
             torch.cuda.synchronize()
             peak_after = torch.cuda.max_memory_allocated()
-            vram_usage = (peak_after - start_mem) / 1048576 # MB, 1024 * 1024
+            vram_usage = (peak_after - self.start_mem) / 1048576 # MB, 1024 * 1024
         else:
             vram_usage = 0.
 
