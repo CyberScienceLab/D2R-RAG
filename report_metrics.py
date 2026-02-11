@@ -1,6 +1,7 @@
 import sys
 from evaluation import evaluate_rag
 import pandas as pd
+from utils import bootstrap_ci
 
 
 if __name__ == "__main__":
@@ -23,15 +24,15 @@ if __name__ == "__main__":
         
     df = pd.read_csv(f"{filepath}/failure_statistics.csv", sep="\t")
 
-    print("Prepatch-latency (per failure label):", df[["failure_label", "latency"]].groupby("failure_label").mean())
-    print("Prepatch-latency (overall):", df["latency"].mean())
+    print("Prepatch-latency (per failure label):", df[["failure_label", "latency"]].groupby("failure_label").apply(bootstrap_ci, include_groups=False))
+    print("Prepatch-latency (overall):", bootstrap_ci(df["latency"]))
 
-    print("Prepatch-VRAM (per failure label):", df[["failure_label", "vram_usage"]].groupby("failure_label").mean())
-    print("Prepatch-VRAM (overall):", df["vram_usage"].mean())
+    print("Prepatch-VRAM (per failure label):", df[["failure_label", "vram_usage"]].groupby("failure_label").apply(bootstrap_ci, include_groups=False))
+    print("Prepatch-VRAM (overall):", bootstrap_ci(df["vram_usage"]))
 
     df['is_consistent'] = df['kg_consistency'] == 'CONSISTENT'
-    print("Prepatch-KG Consistency (per failure label):", df[["failure_label", "is_consistent"]].groupby("failure_label").mean())
-    print("Prepatch-KG Consistency (overall):", (df['kg_consistency'] == 'CONSISTENT').mean())
+    print("Prepatch-KG Consistency (per failure label):", df[["failure_label", "is_consistent"]].groupby("failure_label").apply(bootstrap_ci, include_groups=False))
+    print("Prepatch-KG Consistency (overall):", bootstrap_ci(df['kg_consistency'] == 'CONSISTENT'))
 
     for label in df["failure_label"].unique():
         print("evaluaing", label)

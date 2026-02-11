@@ -12,6 +12,7 @@ import pickle
 import tqdm
 import numpy as np
 import yaml
+from scipy.stats import bootstrap
 
 
 def setup_settings(dataset):
@@ -199,6 +200,18 @@ def context_recall(gt_contexts, contexts):
     recall = [any([gt_context in ctx for ctx in contexts]) for gt_context in gt_contexts]
     recall = sum(recall) / len(recall)
     return recall
+
+def bootstrap_ci(df):
+    data = df.to_numpy().astype(float)
+    if data.shape[0] == 1:
+        mean = data[0]
+        ci = [np.nan, np.nan]
+    else:
+        result = bootstrap((data,), np.mean, confidence_level=0.95, n_resamples=10)
+        ci = result.confidence_interval
+        mean = result.bootstrap_distribution.mean()
+
+    return np.round(mean, 8).item(), (np.round(ci[0], 8).item(), np.round(ci[1], 8).item())
 
 
 class KnowledgeBaseSimulator:

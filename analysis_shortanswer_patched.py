@@ -14,27 +14,82 @@ from qa_metrics.em import em_match
 
 if __name__ == "__main__":
     dataset_name = sys.argv[1]
-    assert dataset_name in ["hotpotqa", "hotpotqa_ts"]
+    assert dataset_name in ["hotpotqa", "hotpotqa_ts", "hotpotqa_nogate", "hotpotqa_nocost", "hotpotqa_tb", "hotpotqa_lb"]
     if dataset_name == "hotpotqa":
         method = "linucb"
         filepath = "files_hotpotqa_v"
         patcher_filepath = "files_hotpotqa_t"
         dataset, knowledgebase = load_hotpotqa(split='validation')
+        with_gating = True
+        with_cost = True
+        latency_budget = 3
+        vram_budget = 6
+        postfix = ""
     elif dataset_name == "hotpotqa_ts":
         dataset_name = "hotpotqa"
         method = "thompsonsampling"
         filepath = "files_hotpotqa_ts_v"
         patcher_filepath = "files_hotpotqa_ts_t"
         dataset, knowledgebase = load_hotpotqa(split='validation')
-        
+        with_gating = True
+        with_cost = True
+        latency_budget = 3
+        vram_budget = 6
+        postfix = ""
+    elif dataset_name == "hotpotqa_nogate":
+        dataset_name = "hotpotqa"
+        method = "linucb"
+        filepath = "files_hotpotqa_v"
+        patcher_filepath = "files_hotpotqa_t"
+        dataset, knowledgebase = load_hotpotqa(split='validation')
+        with_gating = False
+        with_cost = True
+        latency_budget = 3
+        vram_budget = 6
+        postfix = "_nogate"
+    elif dataset_name == "hotpotqa_nocost":
+        dataset_name = "hotpotqa"
+        method = "linucb"
+        filepath = "files_hotpotqa_v"
+        patcher_filepath = "files_hotpotqa_t"
+        dataset, knowledgebase = load_hotpotqa(split='validation')
+        with_gating = True
+        with_cost = False
+        latency_budget = 3
+        vram_budget = 6
+        postfix = "_nocost"
+    elif dataset_name == "hotpotqa_tb":
+        dataset_name = "hotpotqa"
+        method = "linucb"
+        filepath = "files_hotpotqa_v"
+        patcher_filepath = "files_hotpotqa_t"
+        dataset, knowledgebase = load_hotpotqa(split='validation')
+        with_gating = True
+        with_cost = True
+        latency_budget = 0.7*3
+        vram_budget = 0.7*6
+        postfix = "_tb"
+    elif dataset_name == "hotpotqa_lb":
+        dataset_name = "hotpotqa"
+        method = "linucb"
+        filepath = "files_hotpotqa_v"
+        patcher_filepath = "files_hotpotqa_t"
+        dataset, knowledgebase = load_hotpotqa(split='validation')
+        with_gating = True
+        with_cost = True
+        latency_budget = 1.5*3
+        vram_budget = 1.5*6
+        postfix = "_lb"
+
+    print(method, filepath, patcher_filepath, with_gating, with_cost, latency_budget, vram_budget, postfix)
     setup = setup_settings(dataset_name)
 
     kgraph = KnowledgeGraph(filepath, **setup)
     kgraph.build(knowledgebase)
     rag = RAGEngine(filepath, knowledgebase, knowledge_graph=kgraph, **setup)
 
-    patcher = BanditPatcher(filepath, latency_budget=3, vram_budget=6000, method=method, alpha=2.)
-    patcher.load_bandit(patcher_filepath)
+    patcher = BanditPatcher(filepath, latency_budget=latency_budget, vram_budget=vram_budget, method=method, alpha=2., with_gating=with_gating, with_cost=with_cost)
+    patcher.load_bandit(patcher_filepath, postfix)
 
     data = {
         "index": [],
@@ -104,6 +159,10 @@ if __name__ == "__main__":
         data["EM"].append(em_match(list(map(lambda item: item.lower(), gt_answer)), response_obj["response"].lower()))
         data["bandit_reward"].append(str(reward))
 
+        if "reindex" in params_updates.keys() and params_updates["reindex"]:
+            knowledgebase.reset()
+            rag.build_nodes()
+
     dataset = Dataset.from_dict(data)
     dataset = dataset.to_pandas()
 
@@ -113,4 +172,4 @@ if __name__ == "__main__":
         print(f"######## {c} (Incorrect) #######")
         print(dataset[dataset["EM"] == False][c].value_counts())
     
-    dataset.to_csv(f"{filepath}/bandit_eval_dataset.csv", sep="\t", index=False)
+    dataset.to_csv(f"{filepath}/bandit_eval_dataset{postfix}.csv", sep="\t", index=False)

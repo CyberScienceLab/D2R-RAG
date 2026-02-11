@@ -13,24 +13,75 @@ from patcher import BanditPatcher
 
 if __name__ == "__main__":
     dataset_name = sys.argv[1]
-    assert dataset_name in ["fever", "fever_ts"]
+    assert dataset_name in ["fever", "fever_ts", "fever_nogate", "fever_nocost", "fever_tb", "fever_lb"]
     if dataset_name == "fever":
         method = "linucb"
         filepath = "files_fever_t"
         dataset, knowledgebase = load_fever("files_fever_v", split='train')
+        with_gating = True
+        with_cost = True
+        latency_budget = 3
+        vram_budget = 6
+        postfix = ""
     elif dataset_name == "fever_ts":
         dataset_name = "fever"
         method = "thompsonsampling"
         filepath = "files_fever_ts_t"
         dataset, knowledgebase = load_fever("files_fever_ts_v", split='train')
+        with_gating = True
+        with_cost = True
+        latency_budget = 3
+        vram_budget = 6
+        postfix = ""
+    elif dataset_name == "fever_nogate":
+        dataset_name = "fever"
+        method = "linucb"
+        filepath = "files_fever_t"
+        dataset, knowledgebase = load_fever("files_fever_v", split='train')
+        with_gating = False
+        with_cost = True
+        latency_budget = 3
+        vram_budget = 6
+        postfix = "_nogate"
+    elif dataset_name == "fever_nocost":
+        dataset_name = "fever"
+        method = "linucb"
+        filepath = "files_fever_t"
+        dataset, knowledgebase = load_fever("files_fever_v", split='train')
+        with_gating = True
+        with_cost = False
+        latency_budget = 3
+        vram_budget = 6
+        postfix = "_nocost"
+    elif dataset_name == "fever_tb":
+        dataset_name = "fever"
+        method = "linucb"
+        filepath = "files_fever_t"
+        dataset, knowledgebase = load_fever("files_fever_v", split='train')
+        with_gating = True
+        with_cost = True
+        latency_budget = 0.7*3
+        vram_budget = 0.7*6
+        postfix = "_tb"
+    elif dataset_name == "fever_lb":
+        dataset_name = "fever"
+        method = "linucb"
+        filepath = "files_fever_t"
+        dataset, knowledgebase = load_fever("files_fever_v", split='train')
+        with_gating = True
+        with_cost = True
+        latency_budget = 1.5*3
+        vram_budget = 1.5*6
+        postfix = "_lb"
         
+    print(method, filepath, "None", with_gating, with_cost, latency_budget, vram_budget, postfix)
     setup = setup_settings(dataset_name)
 
     kgraph = KnowledgeGraph(filepath, **setup)
     kgraph.build(knowledgebase)
     rag = RAGEngine(filepath, knowledgebase, knowledge_graph=kgraph, **setup)
 
-    patcher = BanditPatcher(filepath, latency_budget=3, vram_budget=6000, method=method, alpha=2.)
+    patcher = BanditPatcher(filepath, latency_budget=latency_budget, vram_budget=vram_budget, method=method, alpha=2., with_gating=with_gating, with_cost=with_cost)
 
     EPOCHS = 2
 
@@ -71,4 +122,8 @@ if __name__ == "__main__":
                 print(failure_label_patched)
                 print(reward)
 
-            patcher.save_bandit()
+            patcher.save_bandit(postfix)
+
+            if "reindex" in params_updates.keys() and params_updates["reindex"]:
+                knowledgebase.reset()
+                rag.build_nodes()

@@ -19,12 +19,17 @@ if __name__ == "__main__":
         method = "linucb"
         filepath = "files_fever_v"
         dataset, knowledgebase = load_fever(filepath, split='validation')
+        latency_budget = 3
+        vram_budget = 6
     elif dataset_name == "fever_ts":
         dataset_name = "fever"
         method = "thompsonsampling"
         filepath = "files_fever_ts_v"
         dataset, knowledgebase = load_fever(filepath, split='validation')
+        latency_budget = 3
+        vram_budget = 6
         
+    print(method, filepath, "None", True, True, latency_budget, vram_budget, "None")
     setup = setup_settings(dataset_name)
 
     kgraph = KnowledgeGraph(filepath, **setup)
@@ -32,7 +37,7 @@ if __name__ == "__main__":
     kgraph.plot()
     rag = RAGEngine(filepath, knowledgebase, knowledge_graph=kgraph, **setup)
 
-    patcher = BanditPatcher(filepath, latency_budget=3, vram_budget=6000, method=method, alpha=2.)
+    patcher = BanditPatcher(filepath, latency_budget=latency_budget, vram_budget=vram_budget, method=method, alpha=2.)
 
     data = {
         "question": [],

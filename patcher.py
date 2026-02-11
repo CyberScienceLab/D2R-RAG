@@ -9,7 +9,7 @@ from transformers import AutoTokenizer, AutoModel
 
 class BanditPatcher:
 
-    def __init__(self, output_path, latency_budget=None, vram_budget=None, method="linucb", alpha=1., train_exploration_rate=0.2, reward_binary_threshold=0.4):
+    def __init__(self, output_path, latency_budget=None, vram_budget=None, method="linucb", alpha=1., train_exploration_rate=0.2, reward_binary_threshold=0.4, with_gating=True, with_cost=True):
         self.output_path = output_path
 
         self.reward_binary_threshold = reward_binary_threshold
@@ -21,25 +21,30 @@ class BanditPatcher:
         assert method in ["linucb", "thompsonsampling"]
         self.init_cfg()
 
+        self.with_gating = with_gating 
+        self.with_cost = with_cost
+
         idx = 0
-        self.possible_actions = []
+        self.retriever_possible_actions = []
+        self.generation_possible_actions = []
         for retriever_type in ["dense", "bm25"]:
             for topk in [10, 20]:
                 for reindex in [False, True]:
-                    self.possible_actions.append((idx, {"retriever": retriever_type, "topk": topk, "reindex": reindex}))
+                    self.retriever_possible_actions.append((idx, {"retriever": retriever_type, "topk": topk, "reindex": reindex}))
                     idx += 1
 
-        self.action_weights = [0.25 / len(self.possible_actions) for _ in range(len(self.possible_actions))]
+        self.action_weights = [0.25 / len(self.retriever_possible_actions) for _ in range(len(self.retriever_possible_actions))]
 
         for reranker in [True]:
-            self.possible_actions.append((idx, {"reranker": reranker}))
+            self.generation_possible_actions.append((idx, {"reranker": reranker}))
             idx += 1
 
         for prompt_edit in ["paraphrase_qa", "simplify_qa"]:
-            self.possible_actions.append((idx, {"prompt_edit": prompt_edit}))
+            self.generation_possible_actions.append((idx, {"prompt_edit": prompt_edit}))
             idx += 1
 
-        self.action_weights += [0.25, 0.25, 0.25]
+        self.action_weights += [0.25 for _ in range(len(self.generation_possible_actions))]
+        self.possible_actions = self.retriever_possible_actions + self.generation_possible_actions
 
         if method == "linucb":
             self.bandit = LinUCB(len(self.possible_actions), self.context_dim, alpha=alpha)
@@ -122,8 +127,10 @@ class BanditPatcher:
             1. * failure_reward + \
             1. * consistency_reward + \
             2. * factuality_reward) / 4
-        reward *= latency_budget_strict * vram_budget_strict
-        reward *= (1 - latency) * (1 - vram)
+        if self.with_gating:
+            reward *= latency_budget_strict * vram_budget_strict
+        if self.with_cost:
+            reward *= (1 - latency) * (1 - vram)
         
         if self.method == "linucb":
             reward = {
@@ -170,11 +177,11 @@ class BanditPatcher:
     def update_bandit(self, context, action, reward):
         self.bandit.update(action, context, reward)
 
-    def save_bandit(self):
-        cloudpickle.dump(self.bandit, open(f"{self.output_path}/{self.method}_patcher.pkl", "wb"))
+    def save_bandit(self, postfix):
+        cloudpickle.dump(self.bandit, open(f"{self.output_path}/{self.method}_patcher{postfix}.pkl", "wb"))
 
-    def load_bandit(self, patcher_filepath):
-        self.bandit = cloudpickle.load(open(f"{patcher_filepath}/{self.method}_patcher.pkl", "rb"))
+    def load_bandit(self, patcher_filepath, postfix):
+        self.bandit = cloudpickle.load(open(f"{patcher_filepath}/{self.method}_patcher{postfix}.pkl", "rb"))
 
     def init_cfg(self):
         self.failure_map = {
