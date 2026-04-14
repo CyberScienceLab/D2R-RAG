@@ -163,6 +163,11 @@ python src/report_metrics_patched.py hotpotqa_lb
 If you use this work in your research, please cite:
 
 ```bibtex
-[Insert your BibTeX citation here]
-
+@inproceedings{
+hashemifar2026diag,
+title={Diagnosing and Repairing Factual Errors in RAG under Budget Constraints},
+author={Soroush Hashemifar, Havva Alizadeh Noughabi, Fattane Zarrinkalam, Ali Dehghantanha},
+booktitle={The 39th Canadian Conference on Artificial Intelligence},
+year={2026},
+}
 ```
